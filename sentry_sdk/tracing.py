@@ -1,4 +1,5 @@
 import re
+import time
 import uuid
 import contextlib
 
@@ -453,13 +454,17 @@ def record_sql_queries(
     if executemany:
         data["db.executemany"] = True
 
-    with capture_internal_exceptions():
-        hub.add_breadcrumb(message=query, category="query", data=data)
-
     with hub.start_span(op="db", description=query) as span:
         for k, v in data.items():
             span.set_data(k, v)
-        yield span
+        start = time.time()
+        try:
+            yield span
+        finally:
+            duration = time.time() - start
+            data['duration'] = duration
+            with capture_internal_exceptions():
+                hub.add_breadcrumb(message=query, category="query", data=data)
 
 
 def _maybe_create_breadcrumbs_from_span(hub, span):
